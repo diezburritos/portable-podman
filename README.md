@@ -201,7 +201,7 @@ podman exec -it dev2-rust bash -c "cd /workspace/rust/bench-data && cargo run --
 
 ## TLS Inspection / Corporate Proxy
 
-The Rust container mounts `/tmp/corp-ca.pem` as the CA cert for cargo. For other containers, mount your cert and set the appropriate env var (`SSL_CERT_FILE`, `NODE_EXTRA_CA_CERTS`, `REQUESTS_CA_BUNDLE`).
+Rust/Cargo use the container default trust store. Behind TLS inspection, add a second compose file (or `podman run` `--volume`) that mounts your PEM and set `CARGO_HTTP_CAINFO` to that path inside the container. For other runtimes, use `SSL_CERT_FILE`, `NODE_EXTRA_CA_CERTS`, `REQUESTS_CA_BUNDLE`, etc.
 
 ## Port Summary
 

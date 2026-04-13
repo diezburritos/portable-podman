@@ -61,13 +61,11 @@ services:
       - ./workspace:/workspace
       - rust-cargo-cache:/usr/local/cargo/registry
       - rust-target-cache:/workspace/rust/target
-      - /tmp/corp-ca.pem:/usr/local/share/ca-certificates/corp-ca.crt:ro
     extra_hosts:
       - "host.containers.internal:host-gateway"
     environment:
       <<: *common-env
       CARGO_HOME: /usr/local/cargo
-      CARGO_HTTP_CAINFO: /usr/local/share/ca-certificates/corp-ca.crt
     command: sleep infinity
     tty: true
     stdin_open: true
