@@ -1,0 +1,195 @@
+version: "3.8"
+
+x-common-env: &common-env
+  NEO4J_URI: bolt://host.containers.internal:7687
+  NEO4J_USER: neo4j
+  NEO4J_PASSWORD: devpassword
+  POSTGRES_DSN: postgresql://dev:devpassword@host.containers.internal:5432/devdb
+  MARIADB_DSN: mysql://dev:devpassword@host.containers.internal:3306/devdb
+  REDIS_URL: redis://host.containers.internal:6379
+  DRAGONFLY_URL: redis://host.containers.internal:6380
+  MEMCACHED_HOST: host.containers.internal:11211
+  SQLITE_DIR: /workspace/sqlite
+
+x-common-volumes: &common-volumes
+  - ./workspace:/workspace
+
+services:
+  # ---------------------------------------------------------------------------
+  # Python 3.13
+  # ---------------------------------------------------------------------------
+  python:
+    image: docker.io/library/python:3.13-bookworm
+    container_name: dev2-python
+    working_dir: /workspace/python
+    volumes:
+      *common-volumes
+    extra_hosts:
+      - "host.containers.internal:host-gateway"
+    environment:
+      <<: *common-env
+      PYTHONPATH: /workspace/python
+    command: sleep infinity
+    tty: true
+    stdin_open: true
+
+  # ---------------------------------------------------------------------------
+  # Node.js 22 (LTS) + TypeScript
+  # ---------------------------------------------------------------------------
+  node:
+    image: docker.io/library/node:22-bookworm
+    container_name: dev2-node
+    working_dir: /workspace/node
+    volumes:
+      *common-volumes
+    extra_hosts:
+      - "host.containers.internal:host-gateway"
+    environment:
+      <<: *common-env
+    command: sleep infinity
+    tty: true
+    stdin_open: true
+
+  # ---------------------------------------------------------------------------
+  # Rust (stable)
+  # ---------------------------------------------------------------------------
+  rust:
+    image: docker.io/library/rust:1.82-bookworm
+    container_name: dev2-rust
+    working_dir: /workspace/rust
+    volumes:
+      - ./workspace:/workspace
+      - rust-cargo-cache:/usr/local/cargo/registry
+      - rust-target-cache:/workspace/rust/target
+      - /tmp/corp-ca.pem:/usr/local/share/ca-certificates/corp-ca.crt:ro
+    extra_hosts:
+      - "host.containers.internal:host-gateway"
+    environment:
+      <<: *common-env
+      CARGO_HOME: /usr/local/cargo
+      CARGO_HTTP_CAINFO: /usr/local/share/ca-certificates/corp-ca.crt
+    command: sleep infinity
+    tty: true
+    stdin_open: true
+
+  # ---------------------------------------------------------------------------
+  # Go 1.23
+  # ---------------------------------------------------------------------------
+  golang:
+    image: docker.io/library/golang:1.23-bookworm
+    container_name: dev2-go
+    working_dir: /workspace/go
+    volumes:
+      - ./workspace:/workspace
+      - go-mod-cache:/go/pkg/mod
+    extra_hosts:
+      - "host.containers.internal:host-gateway"
+    environment:
+      <<: *common-env
+      GOPATH: /go
+    command: sleep infinity
+    tty: true
+    stdin_open: true
+
+  # ---------------------------------------------------------------------------
+  # R 4.x
+  # ---------------------------------------------------------------------------
+  rlang:
+    image: docker.io/rocker/r-ver:4
+    container_name: dev2-r
+    working_dir: /workspace/r
+    volumes:
+      *common-volumes
+    extra_hosts:
+      - "host.containers.internal:host-gateway"
+    environment:
+      <<: *common-env
+    command: sleep infinity
+    tty: true
+    stdin_open: true
+
+  # ---------------------------------------------------------------------------
+  # C++ (GCC 13 + CMake)
+  # ---------------------------------------------------------------------------
+  cpp:
+    image: docker.io/library/gcc:13-bookworm
+    container_name: dev2-cpp
+    working_dir: /workspace/cpp
+    volumes:
+      *common-volumes
+    extra_hosts:
+      - "host.containers.internal:host-gateway"
+    environment:
+      <<: *common-env
+    command: sleep infinity
+    tty: true
+    stdin_open: true
+
+  # ---------------------------------------------------------------------------
+  # Lua 5.4 (via OpenResty for LuaJIT + rocks)
+  # ---------------------------------------------------------------------------
+  lua:
+    image: docker.io/openresty/openresty:bookworm
+    container_name: dev2-lua
+    working_dir: /workspace/lua
+    volumes:
+      *common-volumes
+    extra_hosts:
+      - "host.containers.internal:host-gateway"
+    environment:
+      <<: *common-env
+    command: sleep infinity
+    tty: true
+    stdin_open: true
+
+  # ---------------------------------------------------------------------------
+  # Java 21 (Eclipse Temurin OpenJDK + Maven + Gradle)
+  # ---------------------------------------------------------------------------
+  java:
+    build:
+      context: ./java
+      dockerfile: Dockerfile
+    container_name: dev2-java
+    working_dir: /workspace/java
+    volumes:
+      - ./workspace:/workspace
+      - maven-cache:/root/.m2
+      - gradle-cache:/root/.gradle
+    extra_hosts:
+      - "host.containers.internal:host-gateway"
+    environment:
+      <<: *common-env
+      JAVA_HOME: /opt/java/openjdk
+    command: sleep infinity
+    tty: true
+    stdin_open: true
+
+  # ---------------------------------------------------------------------------
+  # Jupyter (Python — interactive notebooks)
+  # ---------------------------------------------------------------------------
+  jupyter:
+    image: docker.io/library/python:3.13-bookworm
+    container_name: dev2-jupyter
+    working_dir: /workspace
+    ports:
+      - "8888:8888"
+    volumes:
+      - ./workspace:/workspace
+      - ./notebooks:/workspace/notebooks
+    extra_hosts:
+      - "host.containers.internal:host-gateway"
+    environment:
+      <<: *common-env
+      PYTHONPATH: /workspace/python
+    command: >
+      bash -c "pip install --break-system-packages -q jupyter hypothesis neo4j psycopg2-binary redis &&
+               jupyter notebook --ip=0.0.0.0 --port=8888 --no-browser --allow-root
+               --NotebookApp.token='' --NotebookApp.password=''"
+    tty: true
+
+volumes:
+  rust-cargo-cache:
+  rust-target-cache:
+  go-mod-cache:
+  maven-cache:
+  gradle-cache:

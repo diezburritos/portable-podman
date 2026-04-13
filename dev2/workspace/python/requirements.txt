@@ -1,0 +1,7 @@
+hypothesis
+pytest
+neo4j
+psycopg2-binary
+redis
+pymemcache
+pymysql

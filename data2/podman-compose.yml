@@ -1,0 +1,172 @@
+version: "3.8"
+
+services:
+  # ---------------------------------------------------------------------------
+  # Graph DB
+  # ---------------------------------------------------------------------------
+  neo4j:
+    image: docker.io/library/neo4j:5-community
+    container_name: data2-neo4j
+    ports:
+      - "7474:7474"
+      - "7687:7687"
+    environment:
+      NEO4J_AUTH: neo4j/devpassword
+      NEO4J_PLUGINS: '["apoc"]'
+      NEO4J_dbms_memory_heap_initial__size: "256m"
+      NEO4J_dbms_memory_heap_max__size: "512m"
+    volumes:
+      - neo4j-data:/data
+      - neo4j-logs:/logs
+    healthcheck:
+      test: ["CMD", "cypher-shell", "-u", "neo4j", "-p", "devpassword", "RETURN 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  # ---------------------------------------------------------------------------
+  # Relational + Spatial (PostGIS + H3)
+  # ---------------------------------------------------------------------------
+  postgres:
+    image: docker.io/postgis/postgis:16-3.4
+    container_name: data2-postgres
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: dev
+      POSTGRES_PASSWORD: devpassword
+      POSTGRES_DB: devdb
+    volumes:
+      - pg-data:/var/lib/postgresql/data
+      - ./init-sql:/docker-entrypoint-initdb.d
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U dev -d devdb"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+
+  # ---------------------------------------------------------------------------
+  # Cache — Redis
+  # ---------------------------------------------------------------------------
+  redis:
+    image: docker.io/library/redis:7-alpine
+    container_name: data2-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  # ---------------------------------------------------------------------------
+  # Cache — Memcached
+  # ---------------------------------------------------------------------------
+  memcached:
+    image: docker.io/library/memcached:1.6-alpine
+    container_name: data2-memcached
+    ports:
+      - "11211:11211"
+    command: memcached -m 64
+
+  # ---------------------------------------------------------------------------
+  # Cache — Dragonfly (Redis-compatible, multi-threaded)
+  # ---------------------------------------------------------------------------
+  dragonfly:
+    image: ghcr.io/dragonflydb/dragonfly:v1.32.0
+    container_name: data2-dragonfly
+    ports:
+      - "6380:6379"
+    volumes:
+      - dragonfly-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "-p", "6379", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  # ---------------------------------------------------------------------------
+  # MariaDB 11
+  # ---------------------------------------------------------------------------
+  mariadb:
+    image: docker.io/library/mariadb:11
+    container_name: data2-mariadb
+    ports:
+      - "3306:3306"
+    environment:
+      MARIADB_ROOT_PASSWORD: devpassword
+      MARIADB_USER: dev
+      MARIADB_PASSWORD: devpassword
+      MARIADB_DATABASE: devdb
+    volumes:
+      - mariadb-data:/var/lib/mysql
+      - ./init-mariadb:/docker-entrypoint-initdb.d
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+  # ---------------------------------------------------------------------------
+  # Relational + Spatial (PostGIS) — with H3 extension
+  # Use this instead of 'postgres' when you need H3 hexagonal indexing.
+  # Builds from source — first build takes a few minutes.
+  # Cannot run simultaneously with 'postgres' (same port).
+  # ---------------------------------------------------------------------------
+  postgres-h3:
+    build:
+      context: ./postgres-h3
+      dockerfile: Dockerfile
+    container_name: data2-postgres-h3
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: dev
+      POSTGRES_PASSWORD: devpassword
+      POSTGRES_DB: devdb
+    volumes:
+      - pg-h3-data:/var/lib/postgresql/data
+      - ./init-sql:/docker-entrypoint-initdb.d
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U dev -d devdb"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    profiles:
+      - h3
+
+  # ---------------------------------------------------------------------------
+  # Geospatial — H3 + SpatiaLite + GeoPandas/Shapely
+  # ---------------------------------------------------------------------------
+  geospatial:
+    build:
+      context: ./geospatial
+      dockerfile: Dockerfile
+    container_name: data2-geospatial
+    working_dir: /data
+    ports:
+      - "9999:9999"
+    volumes:
+      - geo-data:/data
+      - sqlite-data:/sqlite
+      - ./geospatial/scripts:/scripts:ro
+    command: sleep infinity
+    tty: true
+    stdin_open: true
+
+volumes:
+  neo4j-data:
+  neo4j-logs:
+  pg-data:
+  pg-h3-data:
+  mariadb-data:
+  redis-data:
+  dragonfly-data:
+  geo-data:
+  sqlite-data:
